@@ -12,6 +12,8 @@ void print_lattice(const std::vector<int>& spins, std::size_t L);
 std::size_t idx(int row, int col, int L);                             // Outputs the index of an agent in the lattice with its row and column positions
 std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L); // Returns array containing positions of neighbours for the ith agent in a lattice of length L
 double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
+void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937 rng);
+
 
 int main()
 {
@@ -89,4 +91,28 @@ double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, 
     return J * neighbour_sum + h;  // Local field experienced by ith agent (h_i), h represents external field on system
 }
 
-double prob_up{double h_i, }
+double prob_up(double h_i, double beta)
+{
+    return 1.0/ (1.0 + std::exp(-2.0 * beta * h_i));
+}
+
+void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937 rng)
+{
+    double local{local_field(spins, i, L, J, h)};
+
+    double p_up { prob_up(local, beta)};
+    std::uniform_real_distribution<double> u {0, 1}; // Pick a random number between 0 and 1 (exclusive)
+
+    for(std::size_t j; j < spins.size(); ++j)
+    {
+        if (u(rng) < p_up)
+        {
+            spins[j] = 1;
+        }
+
+        else
+        {
+            spins[j] = -1;
+        }
+    }
+}
