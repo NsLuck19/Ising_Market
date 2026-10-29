@@ -23,16 +23,16 @@ int main()
  
     // Our lattice values and sources of randomness
 
-    const std::size_t L {10};       // Length of our lattice
+    const std::size_t L {100};       // Length of our lattice
     const int seed{11037};         // Seed to ensure results are reproduced each run
     std::mt19937 rng{seed};
 
 
     // Parameters for our model
     const double J {1.0};
-    const double h {};
-    const double T {2.0};
-    const double beta {1.0 / T};
+    const double h {0.0};
+    const double T {50};
+    const double beta {1.0 / T};   // taking k_b = 1 : I am working in natural units
 
 
     // How many times to sweep
@@ -40,27 +40,41 @@ int main()
 
 
     // Initial Spin vector if we want a random start
-    std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
+    //std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
 
     //Initial Spin vector if we want a lattice of +1s
-   // std::vector<int> spins(L*L, 1);
+    //std::vector<int> spins(L*L, 1);
 
     //Initial Spin vector if we wwant a lattice of -1s
     //std::vector<int> spins(L*L, -1);
 
-
+   // std::vector<double> temp_vect {5.0, 3.0, 2.0, 1.5};  // Temperature vector for doing tests for a range of temperatures
     std::cout << "sweep m\n";
-    for (std::size_t i{}; i < n_sweeps; ++i)
+
+    """for (double temperature : temp_vect)
     {
-        sweep(spins, L, J, h, beta, rng);
+        double beta_1 {1/temperature};
+        double magnetisation_sum{};
+        std::vector<int> spins(L*L, 1);
+        
+        std::cout << temperature << " sweep: \n";
 
-        if (i % 10 == 0)
+        for (std::size_t i{}; i < n_sweeps; ++i)
         {
-            std::cout << i << " " << magnetisation(spins) << '\n';
+            sweep(spins, L, J, h, beta_1, rng);
 
+            if (i > 399)
+            {
+               magnetisation_sum += std::abs(magnetisation(spins));
+            }
         }
-    }
-    print_lattice(spins, L);
+
+        std::cout << temperature << " mean magnetisation (over final 100 sweeps): " << magnetisation_sum/100 << '\n';
+    } 
+    """   
+   // THE ABOVE BLOCK OF CODE IS FOR TESTING HOW MAGNETISATION CHANGES OVER THE COURSE OF THE SWEEPING PROCESS, UNCOMMENT IF NECESSARY
+    
+    //print_lattice(spins, L);
 
 }
 
