@@ -96,23 +96,20 @@ double prob_up(double h_i, double beta)
     return 1.0/ (1.0 + std::exp(-2.0 * beta * h_i));
 }
 
-void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937 rng)
+void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937& rng)
 {
     double local{local_field(spins, i, L, J, h)};
 
     double p_up { prob_up(local, beta)};
     std::uniform_real_distribution<double> u {0, 1}; // Pick a random number between 0 and 1 (exclusive)
-
-    for(std::size_t j; j < spins.size(); ++j)
+    
+     if (u(rng) < p_up)
     {
-        if (u(rng) < p_up)
-        {
-            spins[j] = 1;
-        }
-
-        else
-        {
-            spins[j] = -1;
-        }
+            spins[i] = 1;
     }
+    else
+    {
+            spins[i] = -1;
+    }
+    
 }
