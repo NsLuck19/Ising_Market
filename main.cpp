@@ -2,9 +2,11 @@
 #include <random>
 #include <vector>
 #include <cstddef>
+#include <array>
 
 std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng);
 void print_lattice(const std::vector<int>& spins, std::size_t L);
+std::size_t idx(int row, int col, int L); // Outputs the index of an agent in the lattice with its row and column positions
 
 int main()
 {
@@ -16,16 +18,7 @@ int main()
 
     std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
 
-
-    double M{};
-
-    for (int spin : spins)
-    {
-        M += spin;
-    }
     print_lattice(spins, L);
-
-    std::cout << M / spins.size() << std::endl;
 
 }
 
@@ -51,9 +44,30 @@ void print_lattice(const std::vector<int>& spins, std::size_t L)
     {
         for (std::size_t col{}; col < L; ++col)
         {
-            std::cout << (spins[row * L + col] == 1 ? '+' : '-') << ' ';  // row * L + col treats 2D grid as 1D storage for accessing specific agents
+            std::cout << (spins[idx(row, col, L)] == 1 ? '+' : '-') << ' ';  // row * L + col treats 2D grid as 1D storage for accessing specific agents
         }
         std::cout << '\n';
     }
+
+}
+
+std::size_t idx(int row, int col, int L)  
+{
+    return row * L + col;
+}
+
+std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L)
+{
+
+    // Inverses of row * L + col to get row and col
+    const std::size_t row{ i / L};  
+    const std::size_t col {i % L};
+
+    const std::size_t up {idx((row + L - 1) % L, col, L)};
+    const std::size_t down{idx((row + L + 1) % L, col , L)};
+    const std::size_t left{idx(row, (col + L - 1) % L, L)};
+    const std::size_t right{idx(row, (col + L + 1) % L, L)};
+
+    return {up, down, left, right};
 
 }
