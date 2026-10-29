@@ -3,15 +3,20 @@
 #include <vector>
 #include <cstddef>
 #include <array>
+#include <cmath>
+
+
 
 std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng);
 void print_lattice(const std::vector<int>& spins, std::size_t L);
-std::size_t idx(int row, int col, int L); // Outputs the index of an agent in the lattice with its row and column positions
+std::size_t idx(int row, int col, int L);                             // Outputs the index of an agent in the lattice with its row and column positions
+std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L); // Returns array containing positions of neighbours for the ith agent in a lattice of length L
+double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
 
 int main()
 {
 
-    const std::size_t L {8};       // Length of our lattice
+    const std::size_t L {10};       // Length of our lattice
     const int seed{11037};         // Seed to ensure results are reproduced each run
 
     std::mt19937 rng{seed};
@@ -63,11 +68,25 @@ std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L)
     const std::size_t row{ i / L};  
     const std::size_t col {i % L};
 
-    const std::size_t up {idx((row + L - 1) % L, col, L)};
-    const std::size_t down{idx((row + L + 1) % L, col , L)};
+    const std::size_t up {idx((row + L - 1) % L, col, L)};  // Adding L when substracting to ensure unsigned values don't wrap around to top of range
+    const std::size_t down{idx((row + 1) % L, col , L)};
     const std::size_t left{idx(row, (col + L - 1) % L, L)};
-    const std::size_t right{idx(row, (col + L + 1) % L, L)};
+    const std::size_t right{idx(row, (col + 1) % L, L)};
 
     return {up, down, left, right};
 
 }
+
+double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h)
+{
+    int neighbour_sum{};
+
+    for (std::size_t j : neighbours(i, L)) // Iterates through neighbours of ith agent in lattice of length L
+    {
+        neighbour_sum += spins[j];
+    }
+
+    return J * neighbour_sum + h;  // Local field experienced by ith agent (h_i), h represents external field on system
+}
+
+double prob_up{double h_i, }
