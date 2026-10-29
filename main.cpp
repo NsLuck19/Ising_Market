@@ -11,20 +11,55 @@ std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng);
 void print_lattice(const std::vector<int>& spins, std::size_t L);
 std::size_t idx(int row, int col, int L);                             // Outputs the index of an agent in the lattice with its row and column positions
 std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L); // Returns array containing positions of neighbours for the ith agent in a lattice of length L
-double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
-void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937 rng);
+const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
+const double prob_up(double h_i, double beta);
+void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937& rng);
+void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::mt19937& rng);
+double magnetisation(std::vector<int>& spins);
 
 
 int main()
 {
+ 
+    // Our lattice values and sources of randomness
 
     const std::size_t L {10};       // Length of our lattice
     const int seed{11037};         // Seed to ensure results are reproduced each run
-
     std::mt19937 rng{seed};
 
+
+    // Parameters for our model
+    const double J {1.0};
+    const double h {};
+    const double T {2.0};
+    const double beta {1.0 / T};
+
+
+    // How many times to sweep
+    const int n_sweeps{500};
+
+
+    // Initial Spin vector if we want a random start
     std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
 
+    //Initial Spin vector if we want a lattice of +1s
+   // std::vector<int> spins(L*L, 1);
+
+    //Initial Spin vector if we wwant a lattice of -1s
+    //std::vector<int> spins(L*L, -1);
+
+
+    std::cout << "sweep m\n";
+    for (std::size_t i{}; i < n_sweeps; ++i)
+    {
+        sweep(spins, L, J, h, beta, rng);
+
+        if (i % 10 == 0)
+        {
+            std::cout << i << " " << magnetisation(spins) << '\n';
+
+        }
+    }
     print_lattice(spins, L);
 
 }
@@ -79,7 +114,7 @@ std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L)
 
 }
 
-double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h)
+const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h)
 {
     int neighbour_sum{};
 
@@ -91,7 +126,7 @@ double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, 
     return J * neighbour_sum + h;  // Local field experienced by ith agent (h_i), h represents external field on system
 }
 
-double prob_up(double h_i, double beta)
+const double prob_up(double h_i, double beta)
 {
     return 1.0/ (1.0 + std::exp(-2.0 * beta * h_i));
 }
@@ -103,13 +138,37 @@ void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, dou
     double p_up { prob_up(local, beta)};
     std::uniform_real_distribution<double> u {0, 1}; // Pick a random number between 0 and 1 (exclusive)
     
-     if (u(rng) < p_up)
+    if (u(rng) < p_up)
     {
-            spins[i] = 1;
+        spins[i] = 1;
     }
     else
     {
-            spins[i] = -1;
+        spins[i] = -1;
     }
     
+}
+
+void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::mt19937& rng)
+{
+    const std::size_t N {L*L};
+    std::uniform_int_distribution<std::size_t> agent_choice {0, N-1};
+
+    for (std::size_t i {}; i < N; ++i)
+    {
+        std::size_t choice {agent_choice(rng)};  // Pick a random agent in the lattice
+        heat_bath_update(spins, choice, L, J, h, beta, rng);
+    }
+}
+
+double magnetisation(std::vector<int>& spins)
+{
+    double spin_sum {};
+
+    for (int spin : spins)
+    {
+        spin_sum += spin;
+    }
+    return spin_sum / spins.size();
+
 }
