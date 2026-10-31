@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <array>
 #include <cmath>
+#include <algorithm>
 
 
 
@@ -16,6 +17,7 @@ const double prob_up(double h_i, double beta);
 void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937& rng);
 void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::mt19937& rng);
 double magnetisation(std::vector<int>& spins);
+std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_sweeps, std::mt19937& rng);
 
 
 int main()
@@ -23,7 +25,7 @@ int main()
  
     // Our lattice values and sources of randomness
 
-    const std::size_t L {100};       // Length of our lattice
+    const std::size_t L {100};      // Length of our lattice
     const int seed{11037};         // Seed to ensure results are reproduced each run
     std::mt19937 rng{seed};
 
@@ -31,16 +33,16 @@ int main()
     // Parameters for our model
     const double J {1.0};
     const double h {0.0};
-    const double T {50};
+    const double T {1.5};
     const double beta {1.0 / T};   // taking k_b = 1 : I am working in natural units
 
 
     // How many times to sweep
-    const int n_sweeps{500};
+    const int n_sweeps{1000};
 
 
     // Initial Spin vector if we want a random start
-    //std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
+    std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
 
     //Initial Spin vector if we want a lattice of +1s
     //std::vector<int> spins(L*L, 1);
@@ -49,32 +51,33 @@ int main()
     //std::vector<int> spins(L*L, -1);
 
    // std::vector<double> temp_vect {5.0, 3.0, 2.0, 1.5};  // Temperature vector for doing tests for a range of temperatures
-    std::cout << "sweep m\n";
-
-    """for (double temperature : temp_vect)
-    {
-        double beta_1 {1/temperature};
-        double magnetisation_sum{};
-        std::vector<int> spins(L*L, 1);
-        
-        std::cout << temperature << " sweep: \n";
-
-        for (std::size_t i{}; i < n_sweeps; ++i)
-        {
-            sweep(spins, L, J, h, beta_1, rng);
-
-            if (i > 399)
-            {
-               magnetisation_sum += std::abs(magnetisation(spins));
-            }
-        }
-
-        std::cout << temperature << " mean magnetisation (over final 100 sweeps): " << magnetisation_sum/100 << '\n';
-    } 
-    """   
-   // THE ABOVE BLOCK OF CODE IS FOR TESTING HOW MAGNETISATION CHANGES OVER THE COURSE OF THE SWEEPING PROCESS, UNCOMMENT IF NECESSARY
     
     //print_lattice(spins, L);
+
+    std::vector<double> magnetisations {run_magnetisation(spins, L, J, h, beta, n_sweeps, rng)};
+
+    double sum{};
+    double std_sum{};
+    for (std::size_t i{}; i < magnetisations.size(); ++i)
+    {
+        std::cout << magnetisations[i] << '\n';
+        sum += magnetisations[i];
+    }
+
+    double mean{ sum / magnetisations.size()};
+
+    for (std::size_t i {}; i < magnetisations.size(); ++i)
+    {
+        std_sum += std::pow((magnetisations[i] - mean), 2);
+    }
+
+    double standard_deviation{ std::pow((std_sum/magnetisations.size()), 0.5)};
+
+    std::cout << "Mean: " << mean << '\n' 
+              << "Standard deviation: " << standard_deviation << '\n';
+
+
+
 
 }
 
@@ -185,4 +188,19 @@ double magnetisation(std::vector<int>& spins)
     }
     return spin_sum / spins.size();
 
+}
+
+std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_sweeps, std::mt19937& rng)
+{
+
+    std::vector<int> lattice {spins};
+    std::vector<double> magnetisations{};
+
+    for (std::size_t i{}; i < n_sweeps; ++i)
+    {
+        sweep(lattice,L, J, h, beta, rng);
+        magnetisations.push_back(magnetisation(lattice)); // Not including magnetisation of intial state.
+    }
+
+    return magnetisations;
 }
