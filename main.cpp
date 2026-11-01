@@ -21,15 +21,29 @@ std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, do
 void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_burns, std::mt19937& rng);
 double mean(const std::vector<double>& series);
 double standard_deviation(const std::vector<double>& series, double mean);
+std::vector<double> differences(const std::vector<double>& m);
 
 
 
 int main()
 {
+
+    struct RunInfo
+    {
+        std::size_t L{};
+        double J{};
+        double h{};
+        double T{};
+        double beta{1/T};
+        double theta{};
+        unsigned int seed{};
+        std::size_t n_burns{};
+        std::size_t n_sweeps{};
+    } ;
  
     // Our lattice values and sources of randomness
 
-    const std::size_t L {50};      // Length of our lattice
+    const std::size_t L {100};      // Length of our lattice
     const int seed{11037};         // Seed to ensure results are reproduced each run
     std::mt19937 rng{seed};
 
@@ -42,34 +56,28 @@ int main()
 
 
     // How many times to sweep and burn in
-    const int n_burns{10000};
+    const int n_burns{10000};     // Does n_burns sweeps without tracking magnetisations, giving system time to equilibriate
     const int n_sweeps{10000};
 
 
-    // Initial Spin vector if we want a random start
-    //std::vector<int> spins{make_random_lattice(L, rng)};     // Produces a vector of N spins
+    std::cout << "Seed: " << seed << '\n';
+    std::cout << "Parameters: \n" 
+              << "J: " << J << '\n'
+              << "h: " << h << '\n'
+              << "T: " << T << '\n'
+              << "Beta: " << beta<< '\n';
 
-    //Initial Spin vector if we want a lattice of +1s
-    std::vector<int> spins(L*L, 1);
+    // Initial Spins of lattice: 
+    //std::vector<int> spins{make_random_lattice(L, rng)};     // Random Start
 
-    //Initial Spin vector if we wwant a lattice of -1s
-    //std::vector<int> spins(L*L, -1);
+    std::vector<int> spins(L*L, 1);                           // All positive
 
-   // std::vector<double> temp_vect {5.0, 3.0, 2.0, 1.5};  // Temperature vector for doing tests for a range of temperatures
+    //std::vector<int> spins(L*L, -1);                       // All Negative
     
-
     burn_in(spins, L, J, h, beta, n_burns, rng);
+    std::vector<double> m_series {run_magnetisation(spins, L, J, h, beta, n_sweeps, rng)}; // Vector of magnetisations for each sweep
 
-    std::vector<double> magnetisations {run_magnetisation(spins, L, J, h, beta, n_sweeps, rng)};
-
-    std::vector<double> diff{};
-    for (std::size_t i{1}; i < magnetisations.size(); ++i)
-    {
-        diff.push_back(std::abs(magnetisations[i] - magnetisations[i-1]));
-    }
-
-
-    std::cout << "Standard Deviation of |m[i] - m[i - 1]|: " << standard_deviation(diff, mean(diff));
+    double delta_std {standard_deviation(differences(m_series), mean(differences(m_series)))};
 
 
 }
@@ -217,18 +225,39 @@ double standard_deviation(const std::vector<double>& series, double mean)
     return std::sqrt(sum / (series.size() - 1)); // n - 1 as these sweeps are only a sample out of all the possible runs
 }
 
-std::vector<double> differences(const std::vector<double>& m)
+std::vector<double> differences(const std::vector<double>& m_series)
 {
     std::vector<double> d{};
 
-    if (m.size() < 2)
+    if (m_series.size() < 2)
     {
         return d;
     }
 
-    for (std::size_t i{1}; i < m.size(); ++i)
+    for (std::size_t i{1}; i < m_series.size(); ++i)
     {
-        d.push_back(m[i] - m[i - 1]);
+        d.push_back(m_series[i] - m_series[i - 1]);
     }
     return d;
+}
+
+std::vector<std::size_t> extract_events(const std::vector<double>& differences, double theta)
+{
+
+    std::vector<std::size_t> events{};
+
+    for(std::size_t i{}; i < differences.size(); ++i)
+    {
+        if (std::abs(differences[i]) > theta)
+        {
+            events.push_back(i + 1);  // i + 1 as we want the index in the m_series vector that corresponds to the value after the change
+        }
+    }
+
+    return events;
+}
+
+bool write_events(const std::string& path, const std::vector<std::size_t>& events, std::size_t n_sweeps)
+{
+   return true;
 }
