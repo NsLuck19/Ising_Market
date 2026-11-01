@@ -6,8 +6,11 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <fstream>
+#include <iomanip>
 
 
+struct RunInfo;
 std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng);
 void print_lattice(const std::vector<int>& spins, std::size_t L);
 std::size_t idx(int row, int col, int L);                             // Outputs the index of an agent in the lattice with its row and column positions
@@ -22,24 +25,26 @@ void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double 
 double mean(const std::vector<double>& series);
 double standard_deviation(const std::vector<double>& series, double mean);
 std::vector<double> differences(const std::vector<double>& m);
+std::vector<std::size_t> extract_events(const std::vector<double>& differences, double theta);
+bool write_events(const std::string& path, const std::vector<std::size_t>& events, const RunInfo& info);
 
 
-
-int main()
-{
-
-    struct RunInfo
+struct RunInfo
     {
         std::size_t L{};
         double J{};
         double h{};
         double T{};
-        double beta{1/T};
+        double beta{};
         double theta{};
         unsigned int seed{};
         std::size_t n_burns{};
         std::size_t n_sweeps{};
     } ;
+
+int main()
+{
+
  
     // Our lattice values and sources of randomness
 
@@ -51,7 +56,7 @@ int main()
     // Parameters for our model
     const double J {0.0};
     const double h {0.0};
-    const double T {1.5};
+    const double T {6};
     const double beta {1.0 / T};   // taking k_b = 1 : I am working in natural units
 
 
@@ -75,9 +80,20 @@ int main()
     //std::vector<int> spins(L*L, -1);                       // All Negative
     
     burn_in(spins, L, J, h, beta, n_burns, rng);
+
     std::vector<double> m_series {run_magnetisation(spins, L, J, h, beta, n_sweeps, rng)}; // Vector of magnetisations for each sweep
 
     double delta_std {standard_deviation(differences(m_series), mean(differences(m_series)))};
+
+
+    double multiplier{2.5};
+    double theta{ multiplier * delta_std};
+
+    const RunInfo info{L, J, h, T, beta, theta, seed, n_burns, n_sweeps};
+    
+    auto events{extract_events(differences(m_series), theta)};
+
+    write_events("J= 0_2.txt", events, info);
 
 
 }
@@ -257,7 +273,28 @@ std::vector<std::size_t> extract_events(const std::vector<double>& differences, 
     return events;
 }
 
-bool write_events(const std::string& path, const std::vector<std::size_t>& events, std::size_t n_sweeps)
+bool write_events(const std::string& path, const std::vector<std::size_t>& events, const RunInfo& info)
 {
+
+    std::ofstream file {path};
+
+    if (!file)
+    {
+        std::cerr << " Couldn't open file. \n";
+        return false;
+    }
+    
+    file << std::setprecision(8);
+    file << "# L= " << info.L << " |J= " << info.J << " |h= " << info.h << " |T= " << info.T 
+         << " |Beta= " << info.beta << " |Theta= " << info.theta << " |Seed= " << info.seed 
+         << " |Number of burns= " << info.n_burns << " |Number of sweeps= " << info.n_sweeps << '\n'
+         << "|Window= " << info.n_sweeps << '\n';
+
+
+    for(std::size_t event : events)
+    {
+        file << event << '\n';
+    }
+
    return true;
 }
