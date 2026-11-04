@@ -1,0 +1,7 @@
+# L= 100 |J= 0.45 |h= 0 |T= 1 |Beta= 1 |Theta= 0.022440446 |Seed= 11040 |Number of burns= 10000 |Number of sweeps= 10000
+# Window=10000
+6259
+6773
+7774
+8130
+8509

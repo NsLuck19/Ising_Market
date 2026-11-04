@@ -105,8 +105,7 @@ int main()
         return 1;
     }
 
-    const std::vector<double> couplings {0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.42, 0.44, 0.46, 0.5};
-
+    const std::vector<double> couplings {0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.41, 0.42, 0.43, 0.435, 0.4375, 0.44 ,0.45, 0.46, 0.47, 0.48, 0.49, 0.5};
 
     for (double J : couplings)
     {
