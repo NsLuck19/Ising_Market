@@ -8,6 +8,9 @@
 #include <numeric>
 #include <fstream>
 #include <iomanip>
+#include <string>
+#include <filesystem>
+
 
 
 struct RunInfo;
@@ -27,6 +30,8 @@ double standard_deviation(const std::vector<double>& series, double mean);
 std::vector<double> differences(const std::vector<double>& m);
 std::vector<std::size_t> extract_events(const std::vector<double>& differences, double theta);
 bool write_events(const std::string& path, const std::vector<std::size_t>& events, const RunInfo& info);
+bool append_summary(const std::string& path, const RunInfo& info, std::size_t n_events, double mean_abs_m, double std_m);
+bool write_summary_header(const std::string& path);
 
 
 struct RunInfo
@@ -49,23 +54,24 @@ int main()
     // Our lattice values and sources of randomness
 
     const std::size_t L {100};      // Length of our lattice
-    const int seed{11037};         // Seed to ensure results are reproduced each run
-    std::mt19937 rng{seed};
+    const int base_seed{11037};         // Seed to ensure results are reproduced each run
+    std::mt19937 rng{base_seed};
 
 
     // Parameters for our model
     const double J {0.0};
     const double h {0.0};
-    const double T {6};
+    const double T {1.0};
     const double beta {1.0 / T};   // taking k_b = 1 : I am working in natural units
 
 
-    // How many times to sweep and burn in
+    // How many times to sweep and burn in, and how many seeds to iterate 
     const int n_burns{10000};     // Does n_burns sweeps without tracking magnetisations, giving system time to equilibriate
     const int n_sweeps{10000};
+    unsigned int n_seeds{5};
 
 
-    std::cout << "Seed: " << seed << '\n';
+    std::cout << "Seed: " << base_seed << '\n';
     std::cout << "Parameters: \n" 
               << "J: " << J << '\n'
               << "h: " << h << '\n'
@@ -81,19 +87,56 @@ int main()
     
     burn_in(spins, L, J, h, beta, n_burns, rng);
 
-    std::vector<double> m_series {run_magnetisation(spins, L, J, h, beta, n_sweeps, rng)}; // Vector of magnetisations for each sweep
+    std::vector<double> m_series0 {run_magnetisation(spins, L, 0, h, beta, n_sweeps, rng)}; // Vector of magnetisations for each sweep
 
-    double delta_std {standard_deviation(differences(m_series), mean(differences(m_series)))};
+    double sigma0 {standard_deviation(differences(m_series0), mean(differences(m_series0)))}; // Standard deviation of series at J = 0
 
+    double multiplier{2.0};
+    double theta{multiplier * sigma0};
 
-    double multiplier{2.5};
-    double theta{ multiplier * delta_std};
-
-    const RunInfo info{L, J, h, T, beta, theta, seed, n_burns, n_sweeps};
+    const RunInfo info{L, J, h, T, beta, theta, base_seed, n_burns, n_sweeps};
+     
     
-    auto events{extract_events(differences(m_series), theta)};
+    std::filesystem::create_directories("events");
+    
+    if (!write_summary_header("scan_summary.csv"))
+    {
+        std::cerr << "cannot create summary\n";
+        return 1;
+    }
 
-    write_events("J= 0_2.txt", events, info);
+    const std::vector<double> couplings {0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.42, 0.44, 0.46, 0.5};
+
+
+    for (double J : couplings)
+    {
+        for (unsigned int s{}; s < n_seeds; ++s)
+        {
+            const RunInfo info_scan{L, J, h, T, beta, theta, base_seed + s, n_burns, n_sweeps};
+            const std::string path = "events/J" + std::to_string(info_scan.J)+ "_seed" + std::to_string(info_scan.seed) + ".txt";
+
+
+            std::mt19937 rng{info_scan.seed};
+            std::vector<int> spins { make_random_lattice(info_scan.L, rng)};
+            burn_in(spins, info_scan.L, info_scan.J, info_scan.h, info_scan.beta, info_scan.n_burns, rng);
+            const auto m {run_magnetisation(spins, info_scan.L, info_scan.J, info_scan.h, info_scan.beta, info_scan.n_sweeps, rng)};
+            const auto events {extract_events(differences(m), theta)};
+
+            write_events(path, events, info_scan);
+
+            double abs_sum{};
+
+            for (double x : m)
+            {
+                abs_sum += std::abs(x);
+            }
+            const double mean_abs_m {abs_sum / m.size()};
+            const double std_m {standard_deviation(m, mean_abs_m)};
+
+            append_summary("scan_summary.csv", info_scan, events.size(), mean_abs_m, std_m);
+
+        }
+    }
 
 
 }
@@ -288,7 +331,7 @@ bool write_events(const std::string& path, const std::vector<std::size_t>& event
     file << "# L= " << info.L << " |J= " << info.J << " |h= " << info.h << " |T= " << info.T 
          << " |Beta= " << info.beta << " |Theta= " << info.theta << " |Seed= " << info.seed 
          << " |Number of burns= " << info.n_burns << " |Number of sweeps= " << info.n_sweeps << '\n'
-         << "|Window= " << info.n_sweeps << '\n';
+         << "# Window=" << info.n_sweeps << '\n';
 
 
     for(std::size_t event : events)
@@ -297,4 +340,35 @@ bool write_events(const std::string& path, const std::vector<std::size_t>& event
     }
 
    return true;
+}
+
+bool append_summary(const std::string& path, const RunInfo& info, std::size_t n_events, double mean_abs_m, double std_m)
+{
+    std::ofstream file{path, std::ios::app};
+
+    if (!file)
+    {
+        return false;
+    }
+
+    const double event_rate { static_cast<double>(n_events) / static_cast<double>(info.n_sweeps - 1)};
+
+    file << std::setprecision(8);
+    file << info.J << ',' << info.seed << ',' << n_events << ',' << event_rate << ',' << mean_abs_m << ',' << std_m << ','
+         << info.n_burns << ',' << info.n_sweeps<< '\n';
+
+    return true;
+}
+
+bool write_summary_header(const std::string& path)
+{
+    std::ofstream file{path};
+
+    if (!file)
+    {
+        return false;
+    }
+
+    file << "J,seed,n_events,event_rate,mean_abs_m,std_m,n_burn,n_sweeps\n";
+    return true;
 }
