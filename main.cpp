@@ -91,7 +91,7 @@ int main()
 
     double sigma0 {standard_deviation(differences(m_series0), mean(differences(m_series0)))}; // Standard deviation of series at J = 0
 
-    double multiplier{2.0};
+    double multiplier{1.96};
     double theta{multiplier * sigma0};
 
     const RunInfo info{L, J, h, T, beta, theta, base_seed, n_burns, n_sweeps};
@@ -301,7 +301,6 @@ std::vector<double> differences(const std::vector<double>& m_series)
 
 std::vector<std::size_t> extract_events(const std::vector<double>& differences, double theta)
 {
-
     std::vector<std::size_t> events{};
 
     for(std::size_t i{}; i < differences.size(); ++i)
@@ -311,7 +310,7 @@ std::vector<std::size_t> extract_events(const std::vector<double>& differences, 
             events.push_back(i + 1);  // i + 1 as we want the index in the m_series vector that corresponds to the value after the change
         }
     }
-
+    
     return events;
 }
 
