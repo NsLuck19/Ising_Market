@@ -1,0 +1,11 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Downloaded market data
+*.zip
+
+# Editor settings
+.vscode/
