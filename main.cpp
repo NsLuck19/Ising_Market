@@ -18,13 +18,13 @@ std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng);
 void print_lattice(const std::vector<int>& spins, std::size_t L);
 std::size_t idx(int row, int col, int L);                             // Outputs the index of an agent in the lattice with its row and column positions
 std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L); // Returns array containing positions of neighbours for the ith agent in a lattice of length L
-const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
+const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double alpha, double m); // returns h_i (field experienced by ith agent) for a given coupling strength (J) and external field h
 const double prob_up(double h_i, double beta);
-void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937& rng);
-void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::mt19937& rng);
+int heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double alpha, double m, double beta, std::mt19937& rng);
+void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::mt19937& rng);
 const double magnetisation(const std::vector<int>& spins);
-std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_sweeps, std::mt19937& rng);
-void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_burns, std::mt19937& rng);
+std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::size_t n_sweeps, std::mt19937& rng);
+void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::size_t n_burns, std::mt19937& rng);
 double mean(const std::vector<double>& series);
 double standard_deviation(const std::vector<double>& series, double mean);
 std::vector<double> differences(const std::vector<double>& m);
@@ -32,113 +32,88 @@ std::vector<std::size_t> extract_events(const std::vector<double>& differences, 
 bool write_events(const std::string& path, const std::vector<std::size_t>& events, const RunInfo& info);
 bool append_summary(const std::string& path, const RunInfo& info, std::size_t n_events, double mean_abs_m, double std_m);
 bool write_summary_header(const std::string& path);
+bool write_series(const std::string& path, const std::vector<double>& m);
 
 
 struct RunInfo
-    {
-        std::size_t L{};
-        double J{};
-        double h{};
-        double T{};
-        double beta{};
-        double theta{};
-        unsigned int seed{};
-        std::size_t n_burns{};
-        std::size_t n_sweeps{};
-    } ;
+{
+    std::size_t L{};
+    double J{};
+    double h{};
+    double alpha{};
+    double T{};
+    double beta{};
+    double theta{};
+    unsigned int seed{};
+    std::size_t n_burns{};
+    std::size_t n_sweeps{};
+};
 
 int main()
 {
-
- 
-    // Our lattice values and sources of randomness
-
-    const std::size_t L {100};      // Length of our lattice
-    const int base_seed{11037};         // Seed to ensure results are reproduced each run
-    std::mt19937 rng{base_seed};
-
-
-    // Parameters for our model
-    const double J {0.0};
+    // Fixed parameters for our model
+    const std::size_t L {100};     // Length of our 2D square lattice
+    const double J {1.0};
     const double h {0.0};
-    const double T {1.0};
+    const double T {1.5};
     const double beta {1.0 / T};   // taking k_b = 1 : I am working in natural units
 
 
-    // How many times to sweep and burn in, and how many seeds to iterate 
-    const int n_burns{10000};     // Does n_burns sweeps without tracking magnetisations, giving system time to equilibriate
-    const int n_sweeps{10000};
-    unsigned int n_seeds{5};
+     // Run lengths and seeds
+    const std::size_t n_burns {10000};
+    const std::size_t n_sweeps {10000};
+    const unsigned int n_seeds {5};
+    const unsigned int base_seed {11037};
 
 
-    std::cout << "Seed: " << base_seed << '\n';
-    std::cout << "Parameters: \n" 
-              << "J: " << J << '\n'
-              << "h: " << h << '\n'
-              << "T: " << T << '\n'
-              << "Beta: " << beta<< '\n';
+    const std::vector<double> alphas {0.0, 1.0, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
 
-    // Initial Spins of lattice: 
-    //std::vector<int> spins{make_random_lattice(L, rng)};     // Random Start
-
-    std::vector<int> spins(L*L, 1);                           // All positive
-
-    //std::vector<int> spins(L*L, -1);                       // All Negative
-    
-    burn_in(spins, L, J, h, beta, n_burns, rng);
-
-    std::vector<double> m_series0 {run_magnetisation(spins, L, 0, h, beta, n_sweeps, rng)}; // Vector of magnetisations for each sweep
-
-    double sigma0 {standard_deviation(differences(m_series0), mean(differences(m_series0)))}; // Standard deviation of series at J = 0
-
-    double multiplier{1.96};
-    double theta{multiplier * sigma0};
-
-    const RunInfo info{L, J, h, T, beta, theta, base_seed, n_burns, n_sweeps};
-     
-    
     std::filesystem::create_directories("events");
-    
+    std::filesystem::create_directories("series");
+
     if (!write_summary_header("scan_summary.csv"))
     {
         std::cerr << "cannot create summary\n";
         return 1;
     }
 
-    const std::vector<double> couplings {0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.41, 0.42, 0.43, 0.435, 0.4375, 0.44 ,0.45, 0.46, 0.47, 0.48, 0.49, 0.5};
+    std::cout << "L=" << L << " J=" << J << " h=" << h << " T=" << T << " beta=" << beta << '\n';
 
-    for (double J : couplings)
+    for (double alpha : alphas)
     {
-        for (unsigned int s{}; s < n_seeds; ++s)
+        for (unsigned int s {}; s < n_seeds; ++s)
         {
-            const RunInfo info_scan{L, J, h, T, beta, theta, base_seed + s, n_burns, n_sweeps};
-            const std::string path = "events/J" + std::to_string(info_scan.J)+ "_seed" + std::to_string(info_scan.seed) + ".txt";
+            const unsigned int seed {base_seed + s};
+            const std::string tag {"alpha" + std::to_string(alpha) + "_seed" + std::to_string(seed)};
 
+            std::mt19937 run_rng {seed};
+            std::vector<int> spins(L*L, 1);
+            burn_in(spins, L, J, h, alpha, beta, n_burns, run_rng);
+            const std::vector<double> m = run_magnetisation(spins, L, J, h, alpha, beta, n_sweeps, run_rng);
 
-            std::mt19937 rng{info_scan.seed};
-            std::vector<int> spins { make_random_lattice(info_scan.L, rng)};
-            burn_in(spins, info_scan.L, info_scan.J, info_scan.h, info_scan.beta, info_scan.n_burns, rng);
-            const auto m {run_magnetisation(spins, info_scan.L, info_scan.J, info_scan.h, info_scan.beta, info_scan.n_sweeps, rng)};
-            const auto events {extract_events(differences(m), theta)};
+            // Per-run threshold: 1.96 standard deviations of this run's own changes in m
+            const std::vector<double> d = differences(m);
+            const double theta {1.96 * standard_deviation(d, mean(d))};
+            const std::vector<std::size_t> events = extract_events(d, theta);
 
-            write_events(path, events, info_scan);
+            const RunInfo info {L, J, h, alpha, T, beta, theta, seed, n_burns, n_sweeps};
 
-            double abs_sum{};
+            write_events("events/" + tag + ".txt", events, info);
+            write_series("series/" + tag + ".csv", m);
 
-            for (double x : m)
-            {
-                abs_sum += std::abs(x);
-            }
-            const double mean_abs_m {abs_sum / m.size()};
-            const double std_m {standard_deviation(m, mean_abs_m)};
+            double abs_sum {};
+            for (double x : m) abs_sum += std::abs(x);
+            const double mean_abs_m {abs_sum / static_cast<double>(m.size())};
+            const double std_m {standard_deviation(m, mean(m))};    // fixed: was using mean_abs_m
 
-            append_summary("scan_summary.csv", info_scan, events.size(), mean_abs_m, std_m);
+            append_summary("scan_summary.csv", info, events.size(), mean_abs_m, std_m);
 
+            std::cout << "alpha=" << alpha << " seed=" << seed << " events=" << events.size()
+                      << " mean|m|=" << mean_abs_m << '\n';
         }
     }
-
-
 }
+
 
 std::vector<int> make_random_lattice(std::size_t L, std::mt19937& rng)
 {
@@ -190,7 +165,7 @@ std::array<std::size_t, 4> neighbours(std::size_t i, std::size_t L)
 
 }
 
-const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h)
+const double local_field(const std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double alpha, double m)
 {
     int neighbour_sum{};
 
@@ -199,7 +174,7 @@ const double local_field(const std::vector<int>& spins, std::size_t i, std::size
         neighbour_sum += spins[j];
     }
 
-    return J * neighbour_sum + h;  // Local field experienced by ith agent (h_i), h represents external field on system
+    return J * neighbour_sum + h - alpha * spins[i] * std::abs(m);  // Local field experienced by ith agent (h_i), h represents external field on system
 }
 
 const double prob_up(double h_i, double beta)
@@ -207,34 +182,34 @@ const double prob_up(double h_i, double beta)
     return 1.0/ (1.0 + std::exp(-2.0 * beta * h_i));
 }
 
-void heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double beta, std::mt19937& rng)
+// This function returns the change in spin so sweep can track a running total
+int heat_bath_update(std::vector<int>& spins, std::size_t i, std::size_t L, double J, double h, double alpha, double m, double beta, std::mt19937& rng)
 {
-    double local{local_field(spins, i, L, J, h)};
+    const int old_spin{spins[i]};
+    const double local{local_field(spins, i, L, J, h, alpha, m)};
+    const double p_up{prob_up(local, beta)};
+    std::uniform_real_distribution<double> u {0,1};
 
-    double p_up { prob_up(local, beta)};
-    std::uniform_real_distribution<double> u {0, 1}; // Pick a random number between 0 and 1 (exclusive)
-    
-    if (u(rng) < p_up)
-    {
-        spins[i] = 1;
-    }
-    else
-    {
-        spins[i] = -1;
-    }
+    spins[i] = (u(rng) < p_up) ? 1 : -1;
+
+    return spins[i] - old_spin;
     
 }
 
-void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::mt19937& rng)
+void sweep(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::mt19937& rng)
 {
     const std::size_t N {L*L};
     std::uniform_int_distribution<std::size_t> agent_choice {0, N-1};
 
-    for (std::size_t i {}; i < N; ++i)
+    int total {std::accumulate(spins.begin(), spins.end(), 0)};   // exact integer sum of all spins
+
+    for (std::size_t k {}; k < N; ++k)
     {
-        std::size_t choice {agent_choice(rng)};  // Pick a random agent in the lattice
-        heat_bath_update(spins, choice, L, J, h, beta, rng);
+        const std::size_t choice {agent_choice(rng)};
+        const double m {static_cast<double>(total) / static_cast<double>(N)};   // current mean spin
+        total += heat_bath_update(spins, choice, L, J, h, alpha, m, beta, rng);
     }
+
 }
 
 const double magnetisation(const std::vector<int>& spins)
@@ -244,24 +219,23 @@ const double magnetisation(const std::vector<int>& spins)
     return spin_sum / spins.size();
 }
 
-std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_sweeps, std::mt19937& rng)
+std::vector<double> run_magnetisation(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::size_t n_sweeps, std::mt19937& rng)
 {
     std::vector<double> magnetisations{};
-
+    magnetisations.reserve(n_sweeps);
     for (std::size_t i{}; i < n_sweeps; ++i)
     {
-        sweep(spins,L, J, h, beta, rng);
-        magnetisations.push_back(magnetisation(spins)); // Not including magnetisation of intial state.
+        sweep(spins, L, J, h, alpha, beta, rng);
+        magnetisations.push_back(magnetisation(spins));
     }
-
     return magnetisations;
 }
 
-void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double beta, std::size_t n_burns, std::mt19937& rng)
+void burn_in(std::vector<int>& spins, std::size_t L, double J, double h, double alpha, double beta, std::size_t n_burns, std::mt19937& rng)
 {
-    for( std::size_t i{}; i < n_burns; ++i)
+    for (std::size_t i{}; i < n_burns; ++i)
     {
-        sweep(spins, L, J, h, beta, rng);
+        sweep(spins, L, J, h, alpha, beta, rng);
     }
 }
 
@@ -326,7 +300,7 @@ bool write_events(const std::string& path, const std::vector<std::size_t>& event
     }
     
     file << std::setprecision(8);
-    file << "# L= " << info.L << " |J= " << info.J << " |h= " << info.h << " |T= " << info.T 
+    file << "# L= " << info.L << " |J= " << info.J <<"|alpha= " << info.alpha << " |h= " << info.h << " |T= " << info.T 
          << " |Beta= " << info.beta << " |Theta= " << info.theta << " |Seed= " << info.seed 
          << " |Number of burns= " << info.n_burns << " |Number of sweeps= " << info.n_sweeps << '\n'
          << "# Window=" << info.n_sweeps << '\n';
@@ -338,6 +312,23 @@ bool write_events(const std::string& path, const std::vector<std::size_t>& event
     }
 
    return true;
+}
+
+bool write_series(const std::string& path, const std::vector<double>& m)
+{
+    std::ofstream file {path};
+    if (!file)
+    {
+        std::cerr << "Couldn't open " << path << '\n';
+        return false;
+    }
+    file << std::setprecision(10);
+    file << "t,m\n";                                   // t = 0-based index, same as the event timestamps
+    for (std::size_t t {}; t < m.size(); ++t)
+    {
+        file << t << ',' << m[t] << '\n';
+    }
+    return true;
 }
 
 bool append_summary(const std::string& path, const RunInfo& info, std::size_t n_events, double mean_abs_m, double std_m)
@@ -352,21 +343,16 @@ bool append_summary(const std::string& path, const RunInfo& info, std::size_t n_
     const double event_rate { static_cast<double>(n_events) / static_cast<double>(info.n_sweeps - 1)};
 
     file << std::setprecision(8);
-    file << info.J << ',' << info.seed << ',' << n_events << ',' << event_rate << ',' << mean_abs_m << ',' << std_m << ','
-         << info.n_burns << ',' << info.n_sweeps<< '\n';
+    file << info.alpha << ',' << info.J << ',' << info.seed << ',' << n_events << ',' << event_rate << ','
+         << info.theta << ',' << mean_abs_m << ',' << std_m << ',' << info.n_burns << ',' << info.n_sweeps << '\n';
 
     return true;
 }
 
 bool write_summary_header(const std::string& path)
 {
-    std::ofstream file{path};
-
-    if (!file)
-    {
-        return false;
-    }
-
-    file << "J,seed,n_events,event_rate,mean_abs_m,std_m,n_burn,n_sweeps\n";
+    std::ofstream file {path};
+    if (!file) return false;
+    file << "alpha,J,seed,n_events,event_rate,theta,mean_abs_m,std_m,n_burn,n_sweeps\n";
     return true;
 }
