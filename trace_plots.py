@@ -13,9 +13,17 @@ for ax, (a, seed) in zip(axes, runs):
         print('missing file:', path)
         continue
     df = pd.read_csv(path)
-    ax.plot(df['t'], df['m'], lw=0.5)
+    m = df['m']
+    ax.plot(df['t'], m , lw=0.5)
     ax.set_ylabel(f'alpha={float(a):g}, seed {seed}')
-    ax.set_ylim(-1, 1)
+
+    if float(a) == 0:
+        ax.set_ylim(-1,1)
+
+    else:
+        ax.set_ylim(-0.15, 0.6)
+
 axes[-1].set_xlabel('sweep')
 plt.tight_layout()
 plt.savefig('fig_m_traces.png', dpi=150)
+
